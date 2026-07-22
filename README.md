@@ -4,6 +4,10 @@ Servidor **MCP** ([Model Context Protocol](https://modelcontextprotocol.io)) **n
 
 > 🍕 *"¿Qué ofertas hay hoy?" · "¿Cuánto cuesta una familiar de masa madre?" · "¿Qué pedí la última vez?" · "¿Cuántos puntos tengo?"*
 
+![Demo](docs/demo/demo.gif)
+
+<sub>Demo con datos ficticios; no usa tu cuenta. Generada con [VHS](https://github.com/charmbracelet/vhs) desde [`docs/demo/demo.tape`](docs/demo/demo.tape).</sub>
+
 **No puede gastar dinero**: no existe checkout ni ninguna herramienta de pago. Hay herramientas de consulta y unas pocas de escritura *sin coste* (llenar/vaciar el carrito, marcar favoritos) claramente marcadas como `WRITE`.
 
 ## 🧠 Cómo funciona
