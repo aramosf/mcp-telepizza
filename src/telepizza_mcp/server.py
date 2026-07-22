@@ -105,6 +105,59 @@ def get_offers() -> list[dict[str, Any]]:
 
 
 @mcp.tool()
+def get_product_details(product_id: str) -> dict[str, Any]:
+    """Get sizes, dough/sauce/ingredient options and price of one product.
+
+    Use the product ids returned by get_menu or search_products. Price may be
+    null when the delivery store is closed.
+    """
+    return client().product_details(product_id)
+
+
+@mcp.tool()
+def get_offer_details(offer_id: str) -> dict[str, Any]:
+    """Get the full conditions of one promotion (ids from get_offers).
+
+    Availability depends on the session store; with the store closed the site
+    reports the promotion as unavailable.
+    """
+    return client().offer_details(offer_id)
+
+
+@mcp.tool()
+def search_products(query: str) -> list[dict[str, Any]]:
+    """Full-text search of products across the whole menu."""
+    return client().search_products(query)
+
+
+@mcp.tool()
+def get_store_schedule(address: str) -> list[dict[str, Any]]:
+    """Weekly delivery schedule of the Telepizza stores near an address."""
+    return client().store_schedule(address)
+
+
+@mcp.tool()
+def get_delivery_slots() -> dict[str, Any]:
+    """Available delivery time slots today for the default saved address.
+
+    Fails with the site's message when the store is closed.
+    """
+    return client().delivery_slots()
+
+
+@mcp.tool()
+def get_loyalty_status() -> dict[str, Any]:
+    """MiTelepi loyalty points: available, pending, redeemed and last movements."""
+    return client().loyalty_status()
+
+
+@mcp.tool()
+def get_cart() -> dict[str, Any]:
+    """Read-only snapshot of the current cart (items, total, delivery address)."""
+    return client().cart()
+
+
+@mcp.tool()
 def get_order_history() -> list[dict[str, Any]]:
     """List past orders of the account (order id, date and items)."""
     return client().order_history()

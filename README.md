@@ -40,8 +40,15 @@ claude mcp add telepizza -- /home/aramosf/telepizza-mcp/.venv/bin/python -m tele
 | `list_saved_addresses` | Direcciones de entrega guardadas en la cuenta |
 | `set_delivery_address` | Fija tienda/dirección en sesión (necesario para precios); admite `address_id` |
 | `find_stores` | Busca tiendas cercanas a una dirección libre (geocodifica con Nominatim) |
+| `get_store_schedule` | Horario semanal de reparto de las tiendas cercanas a una dirección |
+| `get_delivery_slots` | Franjas de entrega disponibles hoy para la dirección guardada |
 | `get_menu` | Carta con precios por categoría: `ofertas`, `pizzas`, `entrantes`, `burgers`, `postres`, `bebidas` o una ruta de la web |
+| `search_products` | Búsqueda de productos en toda la carta |
+| `get_product_details` | Tamaños, masas, bordes e ingredientes de un producto |
 | `get_offers` | Promociones vigentes |
+| `get_offer_details` | Condiciones completas de una promoción |
+| `get_loyalty_status` | Puntos MiTelepi (disponibles/pendientes/canjeados) y movimientos |
+| `get_cart` | Carrito actual (solo lectura) |
 | `get_order_history` | Pedidos anteriores (id, fecha, artículos) |
 | `get_order_details` | Detalle de un pedido: fecha, envío, pago y totales |
 
@@ -49,7 +56,9 @@ claude mcp add telepizza -- /home/aramosf/telepizza-mcp/.venv/bin/python -m tele
 
 - Los precios dependen de la tienda: `get_menu`/`get_offers` fijan
   automáticamente la dirección guardada por defecto si aún no hay tienda en
-  sesión.
+  sesión. **Con la tienda cerrada** el sitio no permite fijar tienda y la
+  carta se devuelve sin precios (y `get_delivery_slots`/`get_offer_details`
+  reportan la indisponibilidad).
 - El login soporta el flujo de cuentas "migradas" (hash bcrypt en cliente con
   salt del servidor), aunque las cuentas normales no lo necesitan.
 - Scraping de superficie privada propia: usa tu cuenta y tus datos. Si

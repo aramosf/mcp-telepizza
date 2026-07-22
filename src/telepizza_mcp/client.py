@@ -144,19 +144,12 @@ class TelepizzaClient:
                 addrs.append(json.loads(htmllib.unescape(m.group(1))))
         return addrs
 
-    def set_delivery_address(self, address: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Bind the session to a store for the given (or default saved) address.
+    def _store_options(self, lat: float, lng: float) -> list:
+        """Delivery-hour <option> elements for the store serving lat/lng.
 
-        Necesario para que la carta muestre precios reales de la tienda.
+        Cada opción lleva la tienda en data-store-* (id, mínimo, coste, espera).
+        Falla con el mensaje del sitio si la tienda está cerrada.
         """
-        self.ensure_login()
-        if address is None:
-            saved = self.saved_addresses()
-            if not saved:
-                raise TelepizzaError("No saved addresses in the account")
-            address = next((a for a in saved if a.get("isSelected")), saved[0])
-
-        lat, lng = address["latitude"], address["longitude"]
         r = self._get(
             CONTROLLER + "Stores-GetStore",
             params={"sid": "", "lat": lat, "lng": lng, "method": "delivery"},
@@ -168,6 +161,26 @@ class TelepizzaClient:
         opts = soup.select("select[name=deliveryHour] option")
         if not opts:
             raise TelepizzaError("No delivery hours available for this address")
+        return opts
+
+    def _default_address(self, address: dict[str, Any] | None = None) -> dict[str, Any]:
+        if address is not None:
+            return address
+        saved = self.saved_addresses()
+        if not saved:
+            raise TelepizzaError("No saved addresses in the account")
+        return next((a for a in saved if a.get("isSelected")), saved[0])
+
+    def set_delivery_address(self, address: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Bind the session to a store for the given (or default saved) address.
+
+        Necesario para que la carta muestre precios reales de la tienda.
+        """
+        self.ensure_login()
+        address = self._default_address(address)
+
+        lat, lng = address["latitude"], address["longitude"]
+        opts = self._store_options(lat, lng)
         opt = next((o for o in opts if o.get("data-is-first") == "true"), opts[0])
 
         payload = {
@@ -218,6 +231,33 @@ class TelepizzaClient:
         if self.store is None:
             self.set_delivery_address()
 
+    def _try_ensure_store(self) -> str | None:
+        """Best-effort store binding; returns the site's message if unavailable.
+
+        Fuera de horario Stores-GetStore falla ("Esta tienda no se encuentra
+        disponible por el momento") y la carta se sirve sin precios.
+        """
+        try:
+            self.ensure_store()
+            return None
+        except TelepizzaError as e:
+            return str(e)
+
+    def delivery_slots(self, address: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Available delivery time slots for a saved address (default if None)."""
+        self.ensure_login()
+        address = self._default_address(address)
+        opts = self._store_options(address["latitude"], address["longitude"])
+        first = opts[0]
+        return {
+            "address": address.get("addressText"),
+            "shopId": first.get("data-store-id"),
+            "minimumAmount": first.get("data-store-min-amount"),
+            "deliveryCost": first.get("data-store-delivery-cost"),
+            "waitTimeMinutes": first.get("data-store-wait-time"),
+            "slots": [o.get("value") for o in opts if o.get("value")],
+        }
+
     # ----------------------------------------------------------------- stores
 
     def geocode(self, address: str) -> tuple[float, float] | None:
@@ -257,19 +297,99 @@ class TelepizzaClient:
         )
         return [{k: s.get(k) for k in keep} for s in data.get("stores", [])]
 
+    def store_schedule(self, address: str) -> list[dict[str, Any]]:
+        """Weekly delivery schedule of the stores near an address."""
+        coords = self.geocode(address)
+        if coords is None:
+            raise TelepizzaError(f"Could not geocode address: {address}")
+        lat, lng = coords
+        r = self._get(
+            CONTROLLER + "Stores-FindStores",
+            params={"address": address, "lat": lat, "long": lng},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        data = r.json()
+        if data.get("error"):
+            raise TelepizzaError(str(data.get("message", "FindStores error")))
+        result = []
+        for s in data.get("stores", []):
+            schedule = {}
+            sched_html = s.get("storeSchedule") or ""
+            soup = BeautifulSoup(sched_html, "html.parser")
+            for row in soup.select(".clearfix"):
+                spans = row.find_all("span")
+                if len(spans) >= 2:
+                    day = spans[0].get_text(strip=True).rstrip(".:")
+                    schedule[day] = spans[1].get_text(strip=True)
+            result.append({
+                "ID": s.get("ID"),
+                "name": s.get("name"),
+                "city": s.get("city"),
+                "today": s.get("storeHoursText"),
+                "weekly_delivery_schedule": schedule,
+            })
+        return result
+
     # ------------------------------------------------------------------- menu
 
     def menu(self, category: str = "pizzas", with_prices: bool = True) -> list[dict[str, Any]]:
         """Products of a menu category. Prices require a store bound to the session."""
         if with_prices:
-            self.ensure_store()
+            self._try_ensure_store()
         path = MENU_CATEGORIES.get(category, category)
         html = self._get(path).text
         return self._parse_products(html)
 
+    def search_products(self, query: str) -> list[dict[str, Any]]:
+        """Full-text product search (Search-Show, SFCC standard)."""
+        self._try_ensure_store()
+        html = self._get(
+            CONTROLLER + "Search-Show", params={"q": query}
+        ).text
+        return self._parse_products(html)
+
+    def product_details(self, product_id: str) -> dict[str, Any]:
+        """Sizes, dough/sauce options and ingredients of a product (quick view)."""
+        self._try_ensure_store()
+        html = self._get(
+            CONTROLLER + "Product-ShowQuickView",
+            params={"pid": product_id},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        ).text
+        soup = BeautifulSoup(html, "html.parser")
+
+        name_el = soup.select_one(
+            ".product-name, .pdp-title, .modal-title, h1, h2"
+        )
+        sizes = []
+        for o in soup.select("[data-select-variation][data-value-id]"):
+            sizes.append({
+                "label": o.get("data-value-id"),
+                "value": o.get("data-attr-value"),
+            })
+        option_groups = []
+        for ul in soup.select("ul.pdp-option"):
+            items = [li.get_text(" ", strip=True) for li in ul.select("li")]
+            items = [i for i in items if i]
+            option_groups.append({
+                "id": ul.get("data-attr-id"),
+                "options": items or [ul.get_text(" ", strip=True)],
+            })
+        m = re.search(r'data-price="([\d.]+)"', html)
+        price = m.group(1) if m and m.group(1) != "0.00" else None
+        desc = soup.select_one(".description-short, .product-description, .short-description")
+        return {
+            "id": product_id,
+            "name": name_el.get_text(" ", strip=True) if name_el else None,
+            "price_eur": price,
+            "description": desc.get_text(" ", strip=True) if desc else None,
+            "sizes": sizes,
+            "option_groups": option_groups,
+        }
+
     def offers(self) -> list[dict[str, Any]]:
         """Current promotions (/ofertas uses offer tiles, not product tiles)."""
-        self.ensure_store()
+        self._try_ensure_store()
         soup = BeautifulSoup(self._get("/ofertas").text, "html.parser")
         offers = []
         for tile in soup.select(".offer-tile"):
@@ -286,6 +406,37 @@ class TelepizzaClient:
                 or (text and text.get_text(strip=True)),
             })
         return [o for o in offers if o["id"] or o["name"]]
+
+    def offer_details(self, offer_id: str) -> dict[str, Any]:
+        """Full conditions/content of one promotion (Offers-Details modal).
+
+        La disponibilidad depende de la tienda en sesión; con tienda cerrada
+        el sitio responde que la promoción no está disponible.
+        """
+        store_msg = self._try_ensure_store()
+        html = self._get(
+            CONTROLLER + "Offers-Details",
+            params={"promotionID": offer_id},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        ).text
+        soup = BeautifulSoup(html, "html.parser")
+        text = soup.get_text(" ", strip=True)
+        if "no cumple los requisitos" in text or "no está disponible" in text:
+            return {
+                "id": offer_id,
+                "available": False,
+                "message": text[:300],
+                "store_note": store_msg,
+            }
+        title = soup.select_one(".modal-title, h1, h2, .offer-tile__body__title")
+        products = self._parse_products(html)
+        return {
+            "id": offer_id,
+            "available": True,
+            "title": title.get_text(" ", strip=True) if title else None,
+            "text": text[:1500],
+            "products": products or None,
+        }
 
     def _parse_products(self, html: str) -> list[dict[str, Any]]:
         soup = BeautifulSoup(html, "html.parser")
@@ -365,6 +516,65 @@ class TelepizzaClient:
             "shipping_method": shipping_method.get_text(strip=True) if shipping_method else None,
             "payment": grab(r"Payment:\s*(.*?)\s*\d+\s*Items"),
             "totals": totals,
+        }
+
+    # ----------------------------------------------------------- loyalty/cart
+
+    def loyalty_status(self) -> dict[str, Any]:
+        """MiTelepi points: available/pending/redeemed and last movements."""
+        self.ensure_login()
+        html = self._get(CONTROLLER + "Loyalty-MyActivity").text
+        soup = BeautifulSoup(html, "html.parser")
+        box = soup.select_one(".loyalty-transactions") or soup
+
+        def to_int(num: str) -> int:
+            return int(re.sub(r"[^\d-]", "", num) or 0)
+
+        summary = {}
+        for card in box.select(".point-card"):
+            text = card.get_text(" ", strip=True)
+            m = re.search(r"([\d.]+)\s*Puntos\s+(\w+)", text)
+            if m:
+                summary[f"points_{m.group(2).lower()}"] = to_int(m.group(1))
+
+        movements = []
+        text = box.get_text(" ", strip=True)
+        for m in re.finditer(
+            r"([+-]?\s*[\d.]+)\s*pts\s*(\d{2}/\d{2}/\d{4})\s*(.*?)(?=[+-]?\s*[\d.]+\s*pts\s*\d{2}/|$)",
+            text,
+        ):
+            movements.append({
+                "points": to_int(m.group(1)),
+                "date": m.group(2),
+                "description": m.group(3).strip()[:160],
+            })
+        return {"summary": summary, "movements": movements}
+
+    def cart(self) -> dict[str, Any]:
+        """Read-only snapshot of the current cart (mini cart)."""
+        self.ensure_login()
+        html = self._get(
+            CONTROLLER + "Cart-MiniCartShow",
+            params={"isToggleable": "true", "isCheckoutPage": "false"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        ).text
+        soup = BeautifulSoup(html, "html.parser")
+        text = soup.get_text(" ", strip=True)
+        addr = soup.select_one(".address")
+        total = None
+        m = re.search(r"Importe total:\s*([\d.,]+\s*€)", text)
+        if m:
+            total = m.group(1).strip()
+        items = []
+        for li in soup.select(".product-line-item, .line-item, .checkout-promotions__body .row"):
+            t = li.get_text(" ", strip=True)
+            if t and "carrito está vacío" not in t:
+                items.append(t[:160])
+        return {
+            "delivery_address": addr.get_text(" ", strip=True) if addr else None,
+            "empty": "carrito está vacío" in text,
+            "items": items,
+            "total": total,
         }
 
     def close(self) -> None:
