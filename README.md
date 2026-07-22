@@ -47,6 +47,30 @@ claude mcp add telepizza -- $(pwd)/.venv/bin/python -m telepizza_mcp.server
 
 El servidor carga el `.env` del propio repo; no hace falta exportar variables. Para Claude Desktop u otros clientes MCP, configura el mismo comando como servidor stdio.
 
+### Registro en Codex CLI (OpenAI)
+
+Codex CLI habla MCP por **stdio**, igual que Claude Code. Añade el servidor a `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.telepizza]
+command = "/ruta/a/mcp-telepizza/.venv/bin/python"
+args = ["-m", "telepizza_mcp.server"]
+# el .env del repo se carga solo; si prefieres, pásalas aquí:
+# env = { TELEPIZZA_EMAIL = "tu@email.com", TELEPIZZA_PASSWORD = "..." }
+```
+
+O con el comando:
+
+```bash
+codex mcp add telepizza -- /ruta/a/mcp-telepizza/.venv/bin/python -m telepizza_mcp.server
+```
+
+### Registro en ChatGPT
+
+ChatGPT (web/escritorio) admite servidores MCP como **conectores personalizados en modo desarrollador**, pero solo **remotos por HTTP/SSE** — no lanza procesos locales por stdio. Este servidor es stdio, así que para usarlo desde ChatGPT necesitas exponerlo como endpoint remoto, por ejemplo con un puente [`mcp-remote`](https://github.com/geelen/mcp-remote)/`supergateway` y una URL accesible (con su capa de autenticación). Para uso local, **Codex CLI o Claude Code son la vía directa**.
+
+> 📄 ¿Quieres entender cómo funciona telepizza.es por dentro (plataforma, endpoints, sesión, precios por tienda, puntos)? Está todo en [`docs/TELEPIZZA_INTERNALS.md`](docs/TELEPIZZA_INTERNALS.md).
+
 ## 🍕 Herramientas
 
 | Tool | Qué hace |
