@@ -1,7 +1,8 @@
 [project]
-name = "telepizza-mcp"
-version = "0.1.0"
-description = "MCP server (read-only) for telepizza.es: menu, offers, stores, account and order history"
+name = "mcp-telepizza"
+version = "0.2.0"
+description = "Servidor MCP no oficial de solo lectura para telepizza.es: carta, ofertas, tiendas, puntos MiTelepi e historial de pedidos"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.2.0",
@@ -13,6 +14,9 @@ dependencies = [
 
 [project.scripts]
 telepizza-mcp = "telepizza_mcp.server:main"
+
+[project.urls]
+Repository = "https://github.com/aramosf/mcp-telepizza"
 
 [build-system]
 requires = ["hatchling"]
