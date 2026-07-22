@@ -19,13 +19,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fuentes con emojis y símbolos
-        run: sudo apt-get update && sudo apt-get install -y fonts-noto-color-emoji fonts-dejavu
+      - name: Dependencias (ffmpeg + fuentes con emoji/símbolos)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-noto-color-emoji fonts-dejavu-core
+
+      - name: Instala ttyd
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/ttyd \
+            https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64
+          sudo chmod +x /usr/local/bin/ttyd
+          ttyd --version
+
+      - name: Instala vhs (repo apt de Charm)
+        run: |
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://repo.charm.sh/apt/gpg.key \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
+          echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" \
+            | sudo tee /etc/apt/sources.list.d/charm.list
+          sudo apt-get update
+          sudo apt-get install -y vhs
+          vhs --version
 
       - name: Render VHS → GIF
-        uses: charmbracelet/vhs-action@v2
-        with:
-          path: docs/demo/demo.tape
+        run: vhs docs/demo/demo.tape
 
       - name: Commit del GIF
         uses: stefanzweifel/git-auto-commit-action@v5
