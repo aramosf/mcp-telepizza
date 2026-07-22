@@ -158,6 +158,62 @@ def get_cart() -> dict[str, Any]:
 
 
 @mcp.tool()
+def status() -> dict[str, Any]:
+    """Session, store and opening status: logged in, default address, whether
+    the delivery store is open now, next slot and today's hours. Call this
+    first when other tools fail or return no prices."""
+    return client().status()
+
+
+@mcp.tool()
+def get_loyalty_rewards() -> list[dict[str, Any]]:
+    """MiTelepi rewards catalog: what your points buy (title, description,
+    points cost, price and channel delivery/takeaway).
+
+    Redemption happens when ordering: the reward appears as a promotion in
+    the cart/offers flow once you have enough points; this MCP does not
+    place orders, so redeeming is completed on the website or app.
+    """
+    return client().loyalty_rewards()
+
+
+@mcp.tool()
+def add_to_cart(product_id: str, quantity: int = 1) -> dict[str, Any]:
+    """WRITE — adds a product to the real cart of the account (no payment).
+
+    For sized products use the variant pid "<id>-<talla>", e.g.
+    "999990000006814-mediana" (tallas: individual, mediana, familiar).
+    """
+    return client().add_to_cart(product_id, quantity)
+
+
+@mcp.tool()
+def reorder(order_id: str) -> dict[str, Any]:
+    """WRITE — fills the real cart with the items of a previous order
+    (ids from get_order_history). Does not pay or place any order."""
+    return client().reorder(order_id)
+
+
+@mcp.tool()
+def remove_from_cart(remove_url: str) -> dict[str, Any]:
+    """WRITE — removes one cart line. Pass the remove_url that get_cart
+    reports for the item."""
+    return client().remove_from_cart(remove_url)
+
+
+@mcp.tool()
+def clear_cart() -> dict[str, Any]:
+    """WRITE — empties the cart completely. Returns the final snapshot."""
+    return client().clear_cart()
+
+
+@mcp.tool()
+def toggle_favorite_order(order_id: str) -> dict[str, Any]:
+    """WRITE — marks/unmarks a past order as favorite in the account."""
+    return client().toggle_favorite_order(order_id)
+
+
+@mcp.tool()
 def get_order_history() -> list[dict[str, Any]]:
     """List past orders of the account (order id, date and items)."""
     return client().order_history()

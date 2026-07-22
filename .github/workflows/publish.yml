@@ -1,0 +1,26 @@
+# Publica en PyPI al crear una release en GitHub.
+# Requiere configurar antes un "trusted publisher" en PyPI:
+#   pypi.org → Manage project mcp-telepizza → Publishing → GitHub:
+#   owner aramosf, repo mcp-telepizza, workflow publish.yml, environment pypi
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          python -m pip install build
+          python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,8 +1,10 @@
 [project]
 name = "mcp-telepizza"
-version = "0.2.0"
-description = "Servidor MCP no oficial de solo lectura para telepizza.es: carta, ofertas, tiendas, puntos MiTelepi e historial de pedidos"
+version = "0.3.0"
+description = "Servidor MCP no oficial para telepizza.es: carta, ofertas, tiendas, puntos MiTelepi, carrito e historial de pedidos (sin checkout)"
+readme = "README.md"
 license = { file = "LICENSE" }
+keywords = ["mcp", "telepizza", "model-context-protocol", "claude"]
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.2.0",

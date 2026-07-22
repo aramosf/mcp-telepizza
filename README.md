@@ -4,7 +4,7 @@ Servidor **MCP** ([Model Context Protocol](https://modelcontextprotocol.io)) **n
 
 > 🍕 *"¿Qué ofertas hay hoy?" · "¿Cuánto cuesta una familiar de masa madre?" · "¿Qué pedí la última vez?" · "¿Cuántos puntos tengo?"*
 
-**No puede gastar dinero**: no hay carrito de escritura ni checkout. Todas las herramientas son de consulta.
+**No puede gastar dinero**: no existe checkout ni ninguna herramienta de pago. Hay herramientas de consulta y unas pocas de escritura *sin coste* (llenar/vaciar el carrito, marcar favoritos) claramente marcadas como `WRITE`.
 
 ## 🧠 Cómo funciona
 
@@ -63,15 +63,75 @@ El servidor carga el `.env` del propio repo; no hace falta exportar variables. P
 | `get_offers` | Promociones vigentes |
 | `get_offer_details` | Condiciones completas de una promoción |
 | `get_loyalty_status` | Puntos MiTelepi (disponibles/pendientes/canjeados) y movimientos |
-| `get_cart` | Carrito actual (solo lectura) |
+| `get_loyalty_rewards` | Catálogo de canjes: a qué equivalen tus puntos (puntos + precio + canal) |
+| `get_cart` | Carrito actual |
 | `get_order_history` | Pedidos anteriores (id, fecha, artículos) |
 | `get_order_details` | Detalle de un pedido: fecha, envío, pago y totales |
+| `status` | Estado de sesión y tienda: abierta/cerrada, próxima franja, horario de hoy |
+
+### ✍️ Herramientas de escritura (sin coste, pero modifican tu cuenta)
+
+| Tool | Qué hace |
+|---|---|
+| `add_to_cart` | Añade un producto al carrito real (`<id>-<talla>` para productos con tamaño) |
+| `reorder` | Llena el carrito con un pedido anterior |
+| `remove_from_cart` | Quita una línea del carrito (usa el `remove_url` que devuelve `get_cart`) |
+| `clear_cart` | Vacía el carrito |
+| `toggle_favorite_order` | Marca/desmarca un pedido como favorito |
+
+Ninguna de ellas paga ni confirma pedidos — el checkout no existe en este MCP — pero **sí modifican el estado real de tu cuenta**.
+
+## 🔓 Permisos en Claude Code: lectura sin prompts, escritura con confirmación
+
+Por defecto Claude Code pide permiso en cada llamada a una tool MCP. Para usar el servidor con fluidez, añade a tu `settings.json` (`~/.claude/settings.json` global o `.claude/settings.json` del proyecto) una allowlist **solo con las herramientas de lectura**:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__telepizza__status",
+      "mcp__telepizza__login",
+      "mcp__telepizza__list_saved_addresses",
+      "mcp__telepizza__set_delivery_address",
+      "mcp__telepizza__find_stores",
+      "mcp__telepizza__get_store_schedule",
+      "mcp__telepizza__get_delivery_slots",
+      "mcp__telepizza__get_menu",
+      "mcp__telepizza__search_products",
+      "mcp__telepizza__get_product_details",
+      "mcp__telepizza__get_offers",
+      "mcp__telepizza__get_offer_details",
+      "mcp__telepizza__get_loyalty_status",
+      "mcp__telepizza__get_loyalty_rewards",
+      "mcp__telepizza__get_cart",
+      "mcp__telepizza__get_order_history",
+      "mcp__telepizza__get_order_details"
+    ]
+  }
+}
+```
+
+> ⚠️ **Aviso de seguridad**
+>
+> - **No añadas `mcp__telepizza` a secas** (el servidor entero): eso auto-aprobaría también las herramientas de escritura.
+> - Las herramientas `WRITE` (`add_to_cart`, `reorder`, `remove_from_cart`, `clear_cart`, `toggle_favorite_order`) **deben quedarse fuera de la allowlist** para que Claude te pida confirmación cada vez: modifican el carrito y los favoritos de tu cuenta real. No pueden gastar dinero (no hay checkout), pero un carrito lleno por error acaba en sorpresas si luego rematas el pedido a mano.
+> - Estas herramientas usan tus credenciales reales de telepizza.es; concede permisos solo en máquinas de confianza.
+
+## 🎁 Puntos MiTelepi
+
+- `get_loyalty_status` te dice cuántos puntos tienes (disponibles, pendientes de verificar y canjeados) y sus movimientos con caducidades.
+- `get_loyalty_rewards` lista el catálogo de canjes: cada recompensa con su **coste en puntos**, el **precio resultante** y el canal (a domicilio o recoger). Ejemplo: "Pizza mediana 5 ingredientes → 1.600 puntos + 9,95€ a domicilio".
+- **Cómo se usan**: el canje se materializa al hacer un pedido — con puntos suficientes, la promoción aparece disponible en el flujo de ofertas/carrito de la web o la app (máximo 3 canjes distintos por pedido). Este MCP no confirma pedidos, así que el canje se remata en la web/app.
+- 💡 Los puntos caducan (los movimientos de `get_loyalty_status` lo muestran): revisa el saldo de vez en cuando.
 
 ## 📝 Notas
 
-- 🕐 **Con la tienda cerrada** el sitio no permite fijar tienda: la carta se devuelve sin precios y `get_delivery_slots`/`get_offer_details` reportan la indisponibilidad con el mensaje del sitio.
+- 🕐 **Con la tienda cerrada** el sitio no permite fijar tienda: la carta se devuelve sin precios, `status` te dice el horario de hoy, y `get_delivery_slots`/`get_offer_details` reportan la indisponibilidad con el mensaje del sitio.
+- ⚡ Carta y ofertas se cachean 5 minutos por proceso para no machacar la web.
+- 🔁 Si la sesión caduca a mitad de conversación, el cliente reloguea solo.
 - 🔐 Las credenciales viven solo en tu `.env` local (ignorado por git) y solo se envían a telepizza.es.
-- 🧱 Si Telepizza cambia el frontal, los parsers pueden necesitar ajustes.
+- 🧪 Los tests corren offline contra fixtures HTML **sanitizadas** (sin datos personales) capturadas del sitio real; el CI de GitHub Actions no necesita credenciales.
+- 🧱 Si Telepizza cambia el frontal, los parsers pueden necesitar ajustes (los tests avisan).
 
 ## ⚖️ Aviso
 

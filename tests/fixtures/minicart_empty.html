@@ -1,0 +1,131 @@
+<div class="mini-cart__header d-flex flex-column">
+    <div class="d-flex justify-content-end ">
+        <button class="btn-transparent" data-action="close-mini-cart" type="button" id="closeMiniCart" data-testid="cart-close-button">
+            <svg class="icon icon__user">
+                <use xlink:href="#close"></use>
+            </svg>
+        </button>
+    </div>
+    <span class="mini-cart__header-title">
+        
+            
+                
+                    Tu pedido a domicilio
+                
+                
+            
+        
+    </span>
+    <a class="mini-cart__header-shipping-address w-100 d-flex align-items-top flex-row justify-content-around " href="#startOrder" data-toggle="modal" data-target="#startOrder" data-testid="cart-address-button">
+        
+            <div class="d-flex justify-content-end shipping-method">
+                <svg class="icon icon__shipping-method">
+                    
+                        <use xlink:href="#delivery"></use>
+                    
+                </svg>
+            </div>
+            <span class="address">Calle de Ficticia 83, 28000 Madrid</span>
+            <div class="arrow">
+                <svg class="icon icon__arrow icon--270deg">
+                    <use xlink:href="#arrow" x="2" y="-2"></use>
+                </svg>
+            </div>
+        
+    </a>
+</div>
+
+<div class="mini-cart__body">
+    <div class="minicart-error cart-error">
+        
+        
+    </div>
+    
+        <div class="empty-cart">
+            Tu carrito est&aacute; vac&iacute;o
+        </div>
+    
+    <div class="product-summary px-0">
+        
+
+        
+
+        
+    </div>
+</div>
+
+<div class="mini-cart__footer">
+    
+
+    <div class="mini-cart__footer__main">
+        
+        <div class="data-section checkout-promotions d-none" data-testid="checkout-promotions">
+
+    <h4 class="checkout-promotions__title">
+        Selecciona tu oferta
+    </h4>
+
+    <div class="checkout-promotions__body" id="checkoutCardPromotions" data-apply-offer-url="/on/demandware.store/Sites-TelepizzaES-Site/default/Cart-ApplyOffer">
+        
+    </div>
+</div>
+
+
+
+
+        <div class="row">
+            <div class="col-12">
+                <div class="mini-cart__totals">
+    
+    <div class="row mini-cart__totals-total">
+        <div class="col-8 d-flex justify-content-start px-0">
+            <span>Importe total:</span>
+        </div>
+        <div class="col-4 d-flex justify-content-end px-0 total-price">
+            
+            <span>0,00&euro;</span>
+        </div>
+    </div>
+    <div class="row mini-cart__totals-shipping justify-content-end px-0">
+        
+            
+                <span>Env&iacute;o gratis</span>
+            
+        
+    </div>
+</div>
+
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 checkout-continue">
+                <div class="mb-sm-3 ">
+    
+        <div class="info-section">
+            
+    <a href="https://www.telepizza.es/secure/orderhistory"
+        data-testid="cart-history-button"
+        class="btn btn-secondary  btn-block text-uppercase" role="button"
+    >
+        Ver &uacute;ltimos pedidos
+    </a>
+
+
+        </div>
+        <a href="https://www.telepizza.es/ofertas"
+            class="btn btn-terciary btn-block text-uppercase" role="button"
+            data-testid="cart-offers-button"
+            >
+            IR A OFERTAS
+        </a>
+    
+</div>
+
+
+            </div>
+        </div>
+
+        
+    </div>
+</div>
+

@@ -24,6 +24,7 @@ from __future__ import annotations
 import html as htmllib
 import json
 import re
+import time
 from typing import Any
 
 import httpx
@@ -57,6 +58,9 @@ class TelepizzaClient:
         self.password = password
         self.logged_in = False
         self.store: dict[str, Any] | None = None
+        self._cache: dict[str, tuple[float, Any]] = {}
+        self.cache_ttl = 300.0
+        self._store_fail: tuple[float, str] | None = None
         self.http = httpx.Client(
             base_url=BASE,
             headers={
@@ -124,6 +128,31 @@ class TelepizzaClient:
     def ensure_login(self) -> None:
         if not self.logged_in:
             self.login()
+
+    @staticmethod
+    def _looks_logged_out(html: str) -> bool:
+        # Toda página incluye el modal de login; solo la sesión activa muestra
+        # "Cerrar sesión" en la cabecera.
+        return "Cerrar sesión" not in html and "login-form-email" in html
+
+    def _authed_html(self, path: str, **kw) -> str:
+        """GET an account page, re-logging in once if the session expired."""
+        self.ensure_login()
+        html = self._get(path, **kw).text
+        if self._looks_logged_out(html):
+            self.logged_in = False
+            self.login()
+            html = self._get(path, **kw).text
+        return html
+
+    def _cached(self, key: str, fetch):
+        now = time.monotonic()
+        hit = self._cache.get(key)
+        if hit and hit[0] > now:
+            return hit[1]
+        value = fetch()
+        self._cache[key] = (now + self.cache_ttl, value)
+        return value
 
     # -------------------------------------------------------------- addresses
 
@@ -216,6 +245,7 @@ class TelepizzaClient:
         result = r2.json()
         if result.get("error"):
             raise TelepizzaError(f"Stores-SetStore: {json.dumps(result)[:400]}")
+        self._cache.clear()  # los precios dependen de la tienda
         self.store = {
             "shopId": opt["data-store-id"],
             "address": address.get("addressText"),
@@ -237,10 +267,16 @@ class TelepizzaClient:
         Fuera de horario Stores-GetStore falla ("Esta tienda no se encuentra
         disponible por el momento") y la carta se sirve sin precios.
         """
+        if self.store is not None:
+            return None
+        if self._store_fail and self._store_fail[0] > time.monotonic():
+            return self._store_fail[1]
         try:
             self.ensure_store()
+            self._store_fail = None
             return None
         except TelepizzaError as e:
+            self._store_fail = (time.monotonic() + self.cache_ttl, str(e))
             return str(e)
 
     def delivery_slots(self, address: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -337,8 +373,9 @@ class TelepizzaClient:
         if with_prices:
             self._try_ensure_store()
         path = MENU_CATEGORIES.get(category, category)
-        html = self._get(path).text
-        return self._parse_products(html)
+        return self._cached(
+            f"menu:{path}", lambda: self._parse_products(self._get(path).text)
+        )
 
     def search_products(self, query: str) -> list[dict[str, Any]]:
         """Full-text product search (Search-Show, SFCC standard)."""
@@ -390,6 +427,9 @@ class TelepizzaClient:
     def offers(self) -> list[dict[str, Any]]:
         """Current promotions (/ofertas uses offer tiles, not product tiles)."""
         self._try_ensure_store()
+        return self._cached("offers", self._fetch_offers)
+
+    def _fetch_offers(self) -> list[dict[str, Any]]:
         soup = BeautifulSoup(self._get("/ofertas").text, "html.parser")
         offers = []
         for tile in soup.select(".offer-tile"):
@@ -463,8 +503,7 @@ class TelepizzaClient:
     # ------------------------------------------------------------------ orders
 
     def order_history(self) -> list[dict[str, Any]]:
-        self.ensure_login()
-        html = self._get(CONTROLLER + "Order-History").text
+        html = self._authed_html(CONTROLLER + "Order-History")
         soup = BeautifulSoup(html, "html.parser")
         orders = []
         for card in soup.select(".order-history-card__card"):
@@ -492,8 +531,9 @@ class TelepizzaClient:
         return orders
 
     def order_details(self, order_id: str) -> dict[str, Any]:
-        self.ensure_login()
-        html = self._get(CONTROLLER + "Order-Details", params={"orderID": order_id}).text
+        html = self._authed_html(
+            CONTROLLER + "Order-Details", params={"orderID": order_id}
+        )
         soup = BeautifulSoup(html, "html.parser")
         text = soup.get_text(" ", strip=True)
 
@@ -522,8 +562,7 @@ class TelepizzaClient:
 
     def loyalty_status(self) -> dict[str, Any]:
         """MiTelepi points: available/pending/redeemed and last movements."""
-        self.ensure_login()
-        html = self._get(CONTROLLER + "Loyalty-MyActivity").text
+        html = self._authed_html(CONTROLLER + "Loyalty-MyActivity")
         soup = BeautifulSoup(html, "html.parser")
         box = soup.select_one(".loyalty-transactions") or soup
 
@@ -550,8 +589,74 @@ class TelepizzaClient:
             })
         return {"summary": summary, "movements": movements}
 
+    def loyalty_rewards(self) -> list[dict[str, Any]]:
+        """MiTelepi redeemable rewards: what points buy and at what price."""
+        html = self._authed_html(CONTROLLER + "Loyalty-Dashboard")
+        soup = BeautifulSoup(html, "html.parser")
+        rewards = []
+        for card in soup.select(".promo-card-item"):
+            trigger = card.select_one("[data-promotion-id]")
+            title = card.select_one(".title")
+            text = card.select_one(".promo-tooltip .text")
+            footer = card.select_one(".promo-card-footer")
+            points = price = None
+            if footer:
+                ftxt = footer.get_text(" ", strip=True)
+                pm = re.search(r"\+?\s*([\d.]+)\s*Puntos", ftxt)
+                if pm:
+                    points = int(re.sub(r"[^\d]", "", pm.group(1)))
+                em = re.search(r"([\d.,]+)\s*€", ftxt)
+                if em:
+                    price = em.group(1) + "€"
+            rewards.append({
+                "id": trigger.get("data-promotion-id") if trigger else None,
+                "title": title.get_text(strip=True) if title else None,
+                "description": text.get_text(" ", strip=True) if text else None,
+                "points": points,
+                "price_eur": price,
+                "channel": card.get("data-tab-content"),  # delivery / takeaway
+            })
+        return [r for r in rewards if r["id"] or r["title"]]
+
+    def status(self) -> dict[str, Any]:
+        """Session, store and opening status in one call."""
+        login_error = None
+        try:
+            self.ensure_login()
+        except Exception as e:  # credenciales mal, web caída…
+            login_error = str(e)[:200]
+        result: dict[str, Any] = {
+            "logged_in": self.logged_in,
+            "login_error": login_error,
+            "store_in_session": self.store,
+        }
+        if not self.logged_in:
+            return result
+        try:
+            address = self._default_address()
+            result["default_address"] = address.get("addressText")
+            try:
+                opts = self._store_options(address["latitude"], address["longitude"])
+                first = opts[0]
+                result["store_open"] = True
+                result["next_delivery_slot"] = first.get("value")
+                result["minimum_amount"] = first.get("data-store-min-amount")
+            except TelepizzaError as e:
+                result["store_open"] = False
+                result["store_message"] = str(e)[:200]
+                stores = self.find_stores(
+                    address.get("addressText", ""),
+                    lat=address["latitude"],
+                    lng=address["longitude"],
+                )
+                if stores:
+                    result["store_hours_today"] = stores[0].get("storeHoursText")
+        except TelepizzaError as e:
+            result["address_error"] = str(e)[:200]
+        return result
+
     def cart(self) -> dict[str, Any]:
-        """Read-only snapshot of the current cart (mini cart)."""
+        """Snapshot of the current cart (mini cart), with removal handles."""
         self.ensure_login()
         html = self._get(
             CONTROLLER + "Cart-MiniCartShow",
@@ -565,17 +670,109 @@ class TelepizzaClient:
         m = re.search(r"Importe total:\s*([\d.,]+\s*€)", text)
         if m:
             total = m.group(1).strip()
+
         items = []
-        for li in soup.select(".product-line-item, .line-item, .checkout-promotions__body .row"):
+        removers = []
+        for el in soup.select("[data-url*=Remove], [data-action-url*=Remove], a[href*=Remove]"):
+            url = el.get("data-url") or el.get("data-action-url") or el.get("href")
+            if url:
+                removers.append((el, url))
+        for li in soup.select(
+            ".product-line-item, .line-item, .checkout-promotions__body .row, .mini-cart__item"
+        ):
             t = li.get_text(" ", strip=True)
-            if t and "carrito está vacío" not in t:
-                items.append(t[:160])
+            if not t or "carrito está vacío" in t:
+                continue
+            remove_url = None
+            for el, url in removers:
+                if el in li.descendants:
+                    remove_url = url
+                    break
+            items.append({"description": t[:160], "remove_url": remove_url})
+        orphan_removers = [u for el, u in removers if not any(i["remove_url"] == u for i in items)]
         return {
             "delivery_address": addr.get_text(" ", strip=True) if addr else None,
             "empty": "carrito está vacío" in text,
             "items": items,
+            "extra_remove_urls": orphan_removers or None,
             "total": total,
         }
+
+    # ------------------------------------------------ cart WRITE (no payment)
+
+    def add_to_cart(self, product_id: str, quantity: int = 1) -> dict[str, Any]:
+        """Add a product to the cart. Sized products use "<id>-<talla>" pids."""
+        self.ensure_store()
+        r = self.http.post(
+            CONTROLLER + "Cart-AddProduct",
+            data={"pid": product_id, "quantity": str(quantity)},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        r.raise_for_status()
+        try:
+            data = r.json()
+        except ValueError:
+            data = {}
+        if data.get("error") or data.get("errorMessage"):
+            raise TelepizzaError(
+                str(data.get("errorMessage") or data.get("message") or data)[:300]
+            )
+        return {
+            "message": data.get("message"),
+            "cart": self.cart(),
+        }
+
+    def reorder(self, order_id: str) -> dict[str, Any]:
+        """Fill the cart with the items of a previous order (Order-Reorder)."""
+        self.ensure_store()
+        r = self.http.post(
+            CONTROLLER + "Order-Reorder",
+            data={"orderID": order_id, "historyPage": "true"},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data.get("error"):
+            raise TelepizzaError(str(data.get("message") or data)[:300])
+        return {
+            "message": data.get("message"),
+            "reordered_all_items": not data.get("isEmptyCart", False),
+            "cart": self.cart(),
+        }
+
+    def remove_from_cart(self, remove_url: str) -> dict[str, Any]:
+        """Remove one cart line using the remove_url reported by cart()."""
+        self.ensure_login()
+        if "Remove" not in remove_url or "demandware.store" not in remove_url:
+            raise TelepizzaError("remove_url must be a removal URL returned by cart()")
+        r = self.http.get(remove_url, headers={"X-Requested-With": "XMLHttpRequest"})
+        r.raise_for_status()
+        return {"cart": self.cart()}
+
+    def clear_cart(self) -> dict[str, Any]:
+        """Remove every line from the cart."""
+        for _ in range(20):
+            snapshot = self.cart()
+            urls = [i["remove_url"] for i in snapshot["items"] if i["remove_url"]]
+            urls += snapshot.get("extra_remove_urls") or []
+            if snapshot["empty"] or not urls:
+                return snapshot
+            self.http.get(urls[0], headers={"X-Requested-With": "XMLHttpRequest"})
+        return self.cart()
+
+    def toggle_favorite_order(self, order_id: str) -> dict[str, Any]:
+        """Mark/unmark a past order as favorite."""
+        self.ensure_login()
+        r = self.http.post(
+            CONTROLLER + "Order-ToogleFavoriteOrder",
+            params={"orderId": order_id},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        r.raise_for_status()
+        try:
+            return r.json()
+        except ValueError:
+            return {"status": r.status_code}
 
     def close(self) -> None:
         self.http.close()

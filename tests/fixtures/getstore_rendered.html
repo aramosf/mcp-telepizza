@@ -1,0 +1,455 @@
+<div class="start-order__confirmation__store" data-store-id="00697" data-has-meeting-point="false">
+    <button type="button" class="start-order__go-back d-flex justify-content-center align-items-center" id="startOrderGoBack">
+        <svg class="icon icon__arrow icon--90deg">
+            <use xlink:href="#arrow"></use>
+        </svg>
+        Cambiar direcci&oacute;n
+    </button>
+    <div class="start-order__confirmation__title">
+        <div class="start-order__title-icon d-flex justify-content-center align-items-center">
+            <svg class="icon icon__shipping-method">
+                
+                    <use xlink:href="#delivery"></use>
+                
+            </svg>
+        </div>
+        <span class="start-order__title-order">
+            
+                Pedido a domicilio
+            
+        </span>
+    </div>
+    <div class="start-order__message__select-hour notification--info" data-type='error'>
+        Para continuar con tu pedido, por favor selecciona la hora de entrega.
+    </div>
+    
+    
+    <div class="d-none start-order__message notification--error -block" id="startOrderConfirmationMessage"></div>
+    <form action="/on/demandware.store/Sites-TelepizzaES-Site/default/Stores-SetStore" method="POST" id="formStartOrderConfirmation" class="start-order__confirmation__details">
+        <input type="hidden" name="shopId" value="00697">
+        <input type="hidden" name="shippingMethod" value="delivery">
+        <input type="hidden" name="minimumAmount" value="9.94">
+        <input type="hidden" name="waitTime" value="30">
+        <input type="hidden" name="deliveryCost" value="0.0">
+        <input type="hidden" name="isAsap" value="true">
+
+        <div class="start-order__card-container row d-flex justify-content-around">
+            <div class="start-order__card start-order__card-details col-12 col-lg-6">
+                <span class="start-order__title">
+                    <svg class="icon icon__shipping-method">
+                        <use xlink:href="#takeaway"></use>
+                    </svg>
+                    Datos de la tienda
+                </span>
+                
+                    <div class="start-order__confirmation-info  show" data-store-id="00697">
+                        <span class="store-details__name">
+                            Villapizza
+                            
+                        </span>
+                        <span>Avenida Francia 114</span>
+                        <span>28000</span>
+                        <span class="store-details__phone">
+                            <a class="storelocator-phone" href="tel:916012993">916012993</a>
+                        </span>
+                        
+                            <span>CIF: B-85374866</span>
+                        
+
+                        
+                            <span>Raz&oacute;n Social: ARROYOPIZZA S.L.U.             FUENTECIS</span>
+                        
+                    </div>
+                
+            </div>
+            
+                <div class="start-order__card start-order__card-time col-12 col-lg">
+                    
+                        <span class="start-order__title">
+                            <svg class="icon icon__shipping-method">
+                                <use xlink:href="#schedule"></use>
+                            </svg>
+                            Hora de entrega
+                        </span>
+                    
+                    <div class="start-order__confirmation-delivery-hour d-flex flex-column">
+                        <span class="start-order__store-selected-hour " id="selectedHour">
+                            
+                                22:35
+                            
+                        </span>
+                        <span class="">Elige tu horario</span>
+
+                        <div class="custom-select-">
+                            <select class="form-control d-none" name="deliveryHour" id="deliveryHour">
+                                
+                                    <option
+                                        value="2026-07-22T22:35:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="true"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="22:35"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        22:35
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T22:40:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="22:40"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        22:40
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T22:45:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="22:45"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        22:45
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T22:50:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="22:50"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        22:50
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T22:55:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="22:55"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        22:55
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:00:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:00"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:00
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:05:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:05"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:05
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:10:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:10"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:10
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:15:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:15"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:15
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:20:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:20"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:20
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:25:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:25"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:25
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:30:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:30"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:30
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:35:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:35"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:35
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:40:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:40"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:40
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:45:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:45"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:45
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:50:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:50"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:50
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-22T23:55:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="23:55"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        23:55
+                                    </option>
+                                
+                                    <option
+                                        value="2026-07-23T00:00:00"
+                                        data-store-id="00697"
+                                        data-store-min-amount="9.94"
+                                        data-store-delivery-cost="0.0"
+                                        data-store-formatted-delivery-cost="0.0"
+                                        data-store-wait-time="30"
+                                        data-is-first="false"
+                                        data-store-agent-disable="false"
+                                        data-store-agent-label="00:00"
+                                        data-meeting-point-latitude=""
+                                        data-meeting-point-longitude=""
+                                        data-meeting-point-name=""
+                                        data-meeting-point-address=""
+                                        
+                                    >
+                                        00:00
+                                    </option>
+                                
+                            </select>
+                        </div>
+
+                        <span class="start-order__store-selected-hour-advice">*El tiempo de entrega es aproximado.</span>
+                    </div>
+                    
+                    <div class="start-order__confirmation-bottom__second-section">
+                        <span>Informaci&oacute;n legal: Queda prohibida la venta, suministro o dispensaci&oacute;n de alcohol a menores de 18 a&ntilde;os. Telepizza se reserva la facultad de solicitar acreditaci&oacute;n de la edad. S&oacute;lo se dispensar&aacute;n bebidas alcoh&oacute;licas a domicilio en internet hasta las 21:15 horas.</span>
+                    </div>
+                </div>
+            
+        </div>
+        <div class="start-order__footer__delivery">
+            <button
+                class="btn btn-primary start-order__submit d-flex justify-content-center align-items-center "
+                type="submit"
+                
+                id="confirmationFormButton"
+                data-testid="start-order-button"
+            >
+                Empezar pedido
+                <svg class="icon icon__arrow icon--270deg">
+                    <use xlink:href="#arrow"></use>
+                </svg>
+            </button>
+        </div>
+    </form>
+</div>
