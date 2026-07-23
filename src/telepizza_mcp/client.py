@@ -23,8 +23,10 @@ from __future__ import annotations
 
 import html as htmllib
 import json
+import os
 import re
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -37,6 +39,29 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 )
+
+SIZES = {"individual": "16", "mediana": "20", "familiar": "21"}
+
+
+def parse_price(text: str | None) -> float | None:
+    """Normalize a price string to euros as float.
+
+    Acepta tanto "23.95" (data-gtm) como "23,95€" / "1.234,50 €" (HTML es_ES).
+    Devuelve None si no hay número o es 0.
+    """
+    if not text:
+        return None
+    t = text.replace("€", "").replace("EUR", "").strip()
+    if not t:
+        return None
+    # es_ES: si hay coma, es el separador decimal y el punto es de miles.
+    if "," in t:
+        t = t.replace(".", "").replace(",", ".")
+    m = re.search(r"-?\d+(?:\.\d+)?", t)
+    if not m:
+        return None
+    val = float(m.group(0))
+    return val if val != 0 else None
 
 MENU_CATEGORIES = {
     "ofertas": "/ofertas",
@@ -53,7 +78,7 @@ class TelepizzaError(Exception):
 
 
 class TelepizzaClient:
-    def __init__(self, email: str, password: str):
+    def __init__(self, email: str, password: str, session_file: str | None = None):
         self.email = email
         self.password = password
         self.logged_in = False
@@ -70,6 +95,40 @@ class TelepizzaClient:
             follow_redirects=True,
             timeout=30,
         )
+        # Persistencia de sesión: por defecto en la caché del usuario, por email.
+        if session_file is None:
+            base = os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")
+            safe = re.sub(r"[^a-z0-9]+", "_", email.lower())
+            session_file = str(Path(base) / "mcp-telepizza" / f"{safe}.cookies")
+        self._session_file = Path(session_file)
+        self._load_session()
+
+    # -------------------------------------------------------- session on disk
+
+    def _load_session(self) -> None:
+        """Carga cookies de una sesión anterior para evitar reloguear.
+
+        No garantiza validez; los accesos autenticados se auto-curan
+        (_authed_html) reloguéandose si la sesión caducó.
+        """
+        try:
+            data = json.loads(self._session_file.read_text())
+        except (OSError, ValueError):
+            return
+        for name, value in data.get("cookies", {}).items():
+            self.http.cookies.set(name, value, domain="www.telepizza.es")
+        if self.http.cookies.get("dwsid"):
+            self.logged_in = True
+
+    def _save_session(self) -> None:
+        try:
+            self._session_file.parent.mkdir(parents=True, exist_ok=True)
+            self._session_file.write_text(
+                json.dumps({"cookies": dict(self.http.cookies)})
+            )
+            os.chmod(self._session_file, 0o600)
+        except OSError:
+            pass
 
     # ------------------------------------------------------------------ utils
 
@@ -123,6 +182,7 @@ class TelepizzaClient:
         if not data.get("success"):
             raise TelepizzaError(f"Login failed: {json.dumps(data)[:400]}")
         self.logged_in = True
+        self._save_session()
         return data
 
     def ensure_login(self) -> None:
@@ -413,12 +473,11 @@ class TelepizzaClient:
                 "options": items or [ul.get_text(" ", strip=True)],
             })
         m = re.search(r'data-price="([\d.]+)"', html)
-        price = m.group(1) if m and m.group(1) != "0.00" else None
         desc = soup.select_one(".description-short, .product-description, .short-description")
         return {
             "id": product_id,
             "name": name_el.get_text(" ", strip=True) if name_el else None,
-            "price_eur": price,
+            "price": parse_price(m.group(1)) if m else None,
             "description": desc.get_text(" ", strip=True) if desc else None,
             "sizes": sizes,
             "option_groups": option_groups,
@@ -489,12 +548,11 @@ class TelepizzaClient:
                 pass
             desc = tile.select_one(".description-short, .product-tile__description-text")
             url_el = tile.select_one('input[name="product-url"]')
-            price = gtm.get("price")
             products.append({
                 "id": tile.get("data-pid"),
                 "name": gtm.get("name"),
                 "category": gtm.get("category"),
-                "price_eur": None if price in (None, "0.00") else price,
+                "price": parse_price(gtm.get("price")),
                 "description": desc.get_text(strip=True) if desc else None,
                 "url": (BASE + url_el["value"]) if url_el and url_el.get("value") else None,
             })
@@ -605,15 +663,15 @@ class TelepizzaClient:
                 pm = re.search(r"\+?\s*([\d.]+)\s*Puntos", ftxt)
                 if pm:
                     points = int(re.sub(r"[^\d]", "", pm.group(1)))
-                em = re.search(r"([\d.,]+)\s*€", ftxt)
+                em = re.search(r"[\d.,]+\s*€", ftxt)
                 if em:
-                    price = em.group(1) + "€"
+                    price = parse_price(em.group(0))
             rewards.append({
                 "id": trigger.get("data-promotion-id") if trigger else None,
                 "title": title.get_text(strip=True) if title else None,
                 "description": text.get_text(" ", strip=True) if text else None,
                 "points": points,
-                "price_eur": price,
+                "price": price,
                 "channel": card.get("data-tab-content"),  # delivery / takeaway
             })
         return [r for r in rewards if r["id"] or r["title"]]
@@ -639,8 +697,9 @@ class TelepizzaClient:
                 opts = self._store_options(address["latitude"], address["longitude"])
                 first = opts[0]
                 result["store_open"] = True
+                result["store_id"] = first.get("data-store-id")
                 result["next_delivery_slot"] = first.get("value")
-                result["minimum_amount"] = first.get("data-store-min-amount")
+                result["minimum_amount"] = parse_price(first.get("data-store-min-amount"))
             except TelepizzaError as e:
                 result["store_open"] = False
                 result["store_message"] = str(e)[:200]
@@ -655,57 +714,115 @@ class TelepizzaClient:
             result["address_error"] = str(e)[:200]
         return result
 
-    def cart(self) -> dict[str, Any]:
-        """Snapshot of the current cart (mini cart), with removal handles."""
-        self.ensure_login()
-        html = self._get(
+    def _minicart_html(self) -> str:
+        return self._get(
             CONTROLLER + "Cart-MiniCartShow",
             params={"isToggleable": "true", "isCheckoutPage": "false"},
             headers={"X-Requested-With": "XMLHttpRequest"},
         ).text
+
+    @staticmethod
+    def _parse_cart(html: str) -> dict[str, Any]:
+        """Structured cart from the mini-cart HTML.
+
+        Cada línea de producto se ancla en el <input class="quantity"> que
+        lleva data-uuid / data-pid / data-product-name; el importe de línea
+        está en .line-item-total-price-amount.item-total-<uuid>. Las ofertas
+        se quitan con Cart-RemoveOffer (data-url completa en el HTML).
+        """
         soup = BeautifulSoup(html, "html.parser")
         text = soup.get_text(" ", strip=True)
+        empty = "carrito está vacío" in text
         addr = soup.select_one(".address")
+
+        items = []
+        for inp in soup.select("input.quantity[data-uuid]"):
+            uuid = inp.get("data-uuid")
+            pid = inp.get("data-pid", "")
+            base, _, size = pid.partition("-")
+            total_el = soup.select_one(f".line-item-total-price-amount.item-total-{uuid}")
+            line_total = None
+            if total_el:
+                line_total = parse_price(total_el.get_text(" ", strip=True))
+            try:
+                qty = int(inp.get("value") or "1")
+            except ValueError:
+                qty = 1
+            items.append({
+                "uuid": uuid,
+                "pid": pid,
+                "name": inp.get("data-product-name"),
+                "size": size or None,
+                "quantity": qty,
+                "line_total": line_total,
+            })
+
+        offers = []
+        for el in soup.select('[data-url*="Cart-RemoveOffer"]'):
+            url = (el.get("data-url") or "").replace("&amp;", "&")
+            label = el.get("data-promotion-name") or el.get("aria-label")
+            offers.append({"remove_url": url, "label": label})
+
         total = None
         m = re.search(r"Importe total:\s*([\d.,]+\s*€)", text)
         if m:
-            total = m.group(1).strip()
-
-        items = []
-        removers = []
-        for el in soup.select("[data-url*=Remove], [data-action-url*=Remove], a[href*=Remove]"):
-            url = el.get("data-url") or el.get("data-action-url") or el.get("href")
-            if url:
-                removers.append((el, url))
-        for li in soup.select(
-            ".product-line-item, .line-item, .checkout-promotions__body .row, .mini-cart__item"
-        ):
-            t = li.get_text(" ", strip=True)
-            if not t or "carrito está vacío" in t:
-                continue
-            remove_url = None
-            for el, url in removers:
-                if el in li.descendants:
-                    remove_url = url
-                    break
-            items.append({"description": t[:160], "remove_url": remove_url})
-        orphan_removers = [u for el, u in removers if not any(i["remove_url"] == u for i in items)]
+            total = parse_price(m.group(1))
         return {
             "delivery_address": addr.get_text(" ", strip=True) if addr else None,
-            "empty": "carrito está vacío" in text,
+            "empty": empty,
             "items": items,
-            "extra_remove_urls": orphan_removers or None,
+            "offers": offers,
             "total": total,
         }
 
+    def cart(self) -> dict[str, Any]:
+        """Structured snapshot of the current cart (read-only)."""
+        self.ensure_login()
+        return self._parse_cart(self._minicart_html())
+
     # ------------------------------------------------ cart WRITE (no payment)
 
-    def add_to_cart(self, product_id: str, quantity: int = 1) -> dict[str, Any]:
-        """Add a product to the cart. Sized products use "<id>-<talla>" pids."""
+    def add_to_cart(
+        self,
+        product_id: str,
+        size: str | None = None,
+        quantity: int = 1,
+        options: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Add a product to the cart (no payment).
+
+        - Pizzas con tamaño: pasa size="individual"|"mediana"|"familiar" o un
+          product_id que ya incluya el sufijo ("<id>-mediana"). Si el producto
+          tiene tallas y no indicas ninguna, se lanza un error con las opciones.
+        - options: campos extra de configuración (p.ej. masa) que se envían tal
+          cual al formulario Cart-AddProduct.
+        """
         self.ensure_store()
+        base, _, suffix = product_id.partition("-")
+        chosen = (size or suffix or "").lower()
+
+        sizes = self.product_details(base).get("sizes") or []
+        size_labels = {s["label"].lower(): s["label"] for s in sizes}
+        if sizes:
+            if not chosen:
+                raise TelepizzaError(
+                    f"Product {base} needs a size; choose one of "
+                    f"{sorted(size_labels) or list(SIZES)}"
+                )
+            if chosen not in size_labels and chosen not in SIZES:
+                raise TelepizzaError(
+                    f"Unknown size {chosen!r}; options: {sorted(size_labels) or list(SIZES)}"
+                )
+            pid = f"{base}-{chosen}"
+        else:
+            pid = product_id  # producto sin tallas (bebida, entrante…)
+
+        form = {"pid": pid, "quantity": str(quantity)}
+        if options:
+            form.update(options)
         r = self.http.post(
             CONTROLLER + "Cart-AddProduct",
-            data={"pid": product_id, "quantity": str(quantity)},
+            data=form,
             headers={"X-Requested-With": "XMLHttpRequest"},
         )
         r.raise_for_status()
@@ -717,10 +834,7 @@ class TelepizzaClient:
             raise TelepizzaError(
                 str(data.get("errorMessage") or data.get("message") or data)[:300]
             )
-        return {
-            "message": data.get("message"),
-            "cart": self.cart(),
-        }
+        return {"message": data.get("message"), "cart": self.cart()}
 
     def reorder(self, order_id: str) -> dict[str, Any]:
         """Fill the cart with the items of a previous order (Order-Reorder)."""
@@ -740,25 +854,45 @@ class TelepizzaClient:
             "cart": self.cart(),
         }
 
-    def remove_from_cart(self, remove_url: str) -> dict[str, Any]:
-        """Remove one cart line using the remove_url reported by cart()."""
+    def _remove_line(self, pid: str, uuid: str) -> None:
+        self._get(
+            CONTROLLER + "Cart-RemoveProductLineItem",
+            params={"pid": pid, "uuid": uuid},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+
+    def remove_from_cart(self, uuid: str) -> dict[str, Any]:
+        """Remove one product line by its uuid (from cart()['items'])."""
         self.ensure_login()
-        if "Remove" not in remove_url or "demandware.store" not in remove_url:
-            raise TelepizzaError("remove_url must be a removal URL returned by cart()")
-        r = self.http.get(remove_url, headers={"X-Requested-With": "XMLHttpRequest"})
-        r.raise_for_status()
+        snapshot = self._parse_cart(self._minicart_html())
+        line = next((i for i in snapshot["items"] if i["uuid"] == uuid), None)
+        if line is None:
+            raise TelepizzaError(f"No cart line with uuid {uuid}")
+        self._remove_line(line["pid"], uuid)
         return {"cart": self.cart()}
 
     def clear_cart(self) -> dict[str, Any]:
-        """Remove every line from the cart."""
-        for _ in range(20):
-            snapshot = self.cart()
-            urls = [i["remove_url"] for i in snapshot["items"] if i["remove_url"]]
-            urls += snapshot.get("extra_remove_urls") or []
-            if snapshot["empty"] or not urls:
+        """Empty the cart completely. Raises if it could not be emptied."""
+        for _ in range(30):
+            snapshot = self._parse_cart(self._minicart_html())
+            if snapshot["empty"]:
                 return snapshot
-            self.http.get(urls[0], headers={"X-Requested-With": "XMLHttpRequest"})
-        return self.cart()
+            if snapshot["items"]:
+                self._remove_line(snapshot["items"][0]["pid"], snapshot["items"][0]["uuid"])
+            elif snapshot["offers"] and snapshot["offers"][0]["remove_url"]:
+                self._get(
+                    snapshot["offers"][0]["remove_url"],
+                    headers={"X-Requested-With": "XMLHttpRequest"},
+                )
+            else:
+                break  # ni líneas ni ofertas pero no marca vacío: evita bucle
+        final = self._parse_cart(self._minicart_html())
+        if not final["empty"]:
+            raise TelepizzaError(
+                f"Could not empty cart; still {len(final['items'])} item(s), "
+                f"{len(final['offers'])} offer(s)"
+            )
+        return final
 
     def toggle_favorite_order(self, order_id: str) -> dict[str, Any]:
         """Mark/unmark a past order as favorite."""

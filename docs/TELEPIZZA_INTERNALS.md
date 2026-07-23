@@ -242,9 +242,15 @@ Notas:
 - El **reorder** de la web usa `FormData{orderID,historyPage}` y **solo funciona con
   tienda seleccionada**; sin ella, la web lanza el flujo de selección de tienda
   (`startOrderInitWIthRedirect`). Igual en el MCP.
-- El borrado de líneas no tiene un id estable reutilizable: la URL de borrado viene
-  **dentro del HTML del carrito** (`data-url`/`data-action-url` con `…Remove…`); el
-  MCP la devuelve en `cart()` como `remove_url` y `clear_cart()` las va consumiendo.
+- **Borrado de líneas** (descubierto en vivo): cada línea se ancla en su
+  `<input class="quantity">`, que lleva `data-uuid`, `data-pid` y
+  `data-product-name`; el importe de línea está en
+  `.line-item-total-price-amount.item-total-<uuid>`. Se elimina con
+  `Cart-RemoveProductLineItem?pid=<pid>&uuid=<uuid>` (firma estándar SFRA; **no**
+  hay una URL de borrado ya montada en el DOM para las líneas de producto — ese
+  fue un bug inicial del MCP). Las **ofertas** sí traen `data-url` con
+  `Cart-RemoveOffer?promotionID=…` o `?promotionGroupID=…` (esta última la usa
+  `reorder`).
 - **Checkout**: `CheckoutServices-*` / `CheckoutShippingServices-*` (SFRA estándar).
   **No** implementado ni documentado a fondo a propósito: pediría datos de pago y
   gastaría dinero.

@@ -101,10 +101,10 @@ ChatGPT (web/escritorio) admite servidores MCP como **conectores personalizados 
 
 | Tool | Qué hace |
 |---|---|
-| `add_to_cart` | Añade un producto al carrito real (`<id>-<talla>` para productos con tamaño) |
+| `add_to_cart` | Añade un producto al carrito real (`size`=individual/mediana/familiar; valida la talla si el producto la requiere) |
 | `reorder` | Llena el carrito con un pedido anterior |
-| `remove_from_cart` | Quita una línea del carrito (usa el `remove_url` que devuelve `get_cart`) |
-| `clear_cart` | Vacía el carrito |
+| `remove_from_cart` | Quita una línea del carrito por su `uuid` (de `get_cart`) |
+| `clear_cart` | Vacía el carrito (verifica que quedó vacío o lanza error) |
 | `toggle_favorite_order` | Marca/desmarca un pedido como favorito |
 
 Ninguna de ellas paga ni confirma pedidos — el checkout no existe en este MCP — pero **sí modifican el estado real de tu cuenta**.
@@ -157,6 +157,7 @@ Por defecto Claude Code pide permiso en cada llamada a una tool MCP. Para usar e
 - 🕐 **Con la tienda cerrada** el sitio no permite fijar tienda: la carta se devuelve sin precios, `status` te dice el horario de hoy, y `get_delivery_slots`/`get_offer_details` reportan la indisponibilidad con el mensaje del sitio.
 - ⚡ Carta y ofertas se cachean 5 minutos por proceso para no machacar la web.
 - 🔁 Si la sesión caduca a mitad de conversación, el cliente reloguea solo.
+- 💾 La sesión se guarda en `~/.cache/mcp-telepizza/` (permisos `600`) para no reloguear en cada arranque; los precios y el carrito son numéricos (euros como `float`).
 - 🔐 Las credenciales viven solo en tu `.env` local (ignorado por git) y solo se envían a telepizza.es.
 - 🧪 Los tests corren offline contra fixtures HTML **sanitizadas** (sin datos personales) capturadas del sitio real; el CI de GitHub Actions no necesita credenciales.
 - 🧱 Si Telepizza cambia el frontal, los parsers pueden necesitar ajustes (los tests avisan).

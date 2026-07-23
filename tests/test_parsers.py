@@ -27,8 +27,11 @@ class FakeResponse:
 
 
 @pytest.fixture
-def client(monkeypatch):
-    c = TelepizzaClient("user@example.com", "secret")
+def client(tmp_path):
+    # session_file en tmp para no tocar la caché real del usuario
+    c = TelepizzaClient(
+        "user@example.com", "secret", session_file=str(tmp_path / "s.cookies")
+    )
     c.logged_in = True
     c.store = {"shopId": "00000"}  # evita ensure_store en parsers
     return c
@@ -40,7 +43,7 @@ def test_parse_menu_products(client):
     first = products[0]
     assert first["id"]
     assert first["name"]
-    assert first["price_eur"] not in (None, "0.00")
+    assert isinstance(first["price"], float) and first["price"] > 0
     assert first["url"].startswith("https://www.telepizza.es/product/")
 
 
@@ -88,14 +91,36 @@ def test_parse_loyalty_rewards(client, monkeypatch):
     assert rewards[0]["channel"] in ("delivery", "takeaway")
 
 
-def test_parse_empty_cart(client, monkeypatch):
-    monkeypatch.setattr(
-        client, "_get", lambda path, **kw: FakeResponse(fixture("minicart_empty.html"))
-    )
-    cart = client.cart()
+def test_parse_empty_cart(client):
+    cart = client._parse_cart(fixture("minicart_empty.html"))
     assert cart["empty"] is True
     assert cart["items"] == []
-    assert cart["total"] == "0,00€"
+    assert cart["total"] is None  # parse_price("0,00€") -> None
+
+
+def test_parse_filled_cart(client):
+    cart = client._parse_cart(fixture("minicart_filled.html"))
+    assert cart["empty"] is False
+    assert len(cart["items"]) == 2
+    line = cart["items"][0]
+    assert line["uuid"] and line["pid"]
+    assert line["name"]
+    assert line["size"] == "mediana"
+    assert line["quantity"] >= 1
+    assert isinstance(line["line_total"], float) and line["line_total"] > 0
+    assert isinstance(cart["total"], float) and cart["total"] > 0
+
+
+def test_parse_price_formats():
+    from telepizza_mcp.client import parse_price
+
+    assert parse_price("23.95") == 23.95
+    assert parse_price("23,95€") == 23.95
+    assert parse_price("1.234,50 €") == 1234.50
+    assert parse_price("0,00€") is None
+    assert parse_price("0.00") is None
+    assert parse_price(None) is None
+    assert parse_price("gratis") is None
 
 
 def test_parse_product_details(client, monkeypatch):

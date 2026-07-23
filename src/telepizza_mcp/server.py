@@ -178,13 +178,20 @@ def get_loyalty_rewards() -> list[dict[str, Any]]:
 
 
 @mcp.tool()
-def add_to_cart(product_id: str, quantity: int = 1) -> dict[str, Any]:
+def add_to_cart(
+    product_id: str,
+    size: str = "",
+    quantity: int = 1,
+    options: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """WRITE — adds a product to the real cart of the account (no payment).
 
-    For sized products use the variant pid "<id>-<talla>", e.g.
-    "999990000006814-mediana" (tallas: individual, mediana, familiar).
+    For pizzas with sizes pass size="individual"|"mediana"|"familiar" (or a
+    product_id already ending in "-<size>"). If the product has sizes and none
+    is given, the call fails listing the available ones. `options` carries extra
+    config fields (e.g. dough) sent as-is to the site.
     """
-    return client().add_to_cart(product_id, quantity)
+    return client().add_to_cart(product_id, size=size or None, quantity=quantity, options=options)
 
 
 @mcp.tool()
@@ -195,10 +202,9 @@ def reorder(order_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-def remove_from_cart(remove_url: str) -> dict[str, Any]:
-    """WRITE — removes one cart line. Pass the remove_url that get_cart
-    reports for the item."""
-    return client().remove_from_cart(remove_url)
+def remove_from_cart(uuid: str) -> dict[str, Any]:
+    """WRITE — removes one cart line by its uuid (from get_cart()['items'])."""
+    return client().remove_from_cart(uuid)
 
 
 @mcp.tool()
