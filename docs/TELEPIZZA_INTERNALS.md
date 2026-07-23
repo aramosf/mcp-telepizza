@@ -202,8 +202,31 @@ el resto de opciones (masa, ingredientes) se envían al configurar la línea.
   promo no aplica, responde "no cumple los requisitos / no disponible".
   → `client.offer_details()`.
 - `Offers-SaveVoucherData` / `Offers-ShowWinWheel` — pertenecen a la **ruleta de
-  premios** (win wheel), **no** a un cajetín de cupones genérico. Por eso el MCP
-  **no** implementa `apply_voucher`.
+  premios** (win wheel), **no** a un cajetín de cupones genérico.
+- **Códigos promocionales** (sí existe): `Cart-AddCoupon?couponCode=<code>&csrf_token=<t>`
+  (GET → JSON `{error, errorMessage}`; código inválido → "Este código no puede ser
+  agregado"). Quitar: `Cart-RemoveCouponLineItem?code=<code>&uuid=<uuid>` (firma
+  SFRA). Requiere carrito no vacío.
+
+### Modo recoger (takeaway)
+
+`Stores-GetStore` acepta `method=takeaway`, pero **exige `sid=<storeId>`** (a
+diferencia de delivery, que va por coordenadas): sin sid responde "No atendemos
+esta dirección". Flujo: `find_stores` → coger un `ID` → `GetStore?sid&lat&lng&method=takeaway`
+(devuelve `store` + `<select deliveryHour>` con 50+ franjas y **sin mínimo**) →
+`Stores-SetStore` con `shippingMethod: "takeaway"` (mismo body JSON). Desbloquea
+las ofertas y canjes MiTelepi "a recoger".
+
+### Alérgenos
+
+No hay dato de alérgenos por producto en la web; solo un **PDF oficial**
+(`.../documents/alergenos.pdf`, ~2 MB, 10 págs). Es una tabla producto × 14
+alérgenos EU con marcadores `●` (presente) / `○` (puede estar presente) y
+subcódigos de cereal con gluten (TR trigo, CE cebada, AV avena…). El mapeo por
+columnas vía coordenadas X del PDF salió **ruidoso** (≈18 clústeres para 14
+alérgenos), así que el MCP **no** determina "apto/no apto": expone el PDF oficial
+como fuente autorizada + parseo best-effort del texto por fila (nombre + recuento
+de marcadores). Decisión deliberada por seguridad (salud).
 
 ---
 

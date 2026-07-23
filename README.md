@@ -83,8 +83,10 @@ ChatGPT (web/escritorio) admite servidores MCP como **conectores personalizados 
 | `list_saved_addresses` | Direcciones de entrega guardadas en la cuenta |
 | `set_delivery_address` | Fija tienda/dirección en sesión (necesario para precios); admite `address_id` |
 | `find_stores` | Busca tiendas cercanas a una dirección libre (geocodifica con Nominatim/OSM) |
+| `set_pickup_store` | Cambia a modo **recoger** (takeaway) para una tienda (id de `find_stores`); sin pedido mínimo |
 | `get_store_schedule` | Horario semanal de reparto de las tiendas cercanas a una dirección |
 | `get_delivery_slots` | Franjas de entrega disponibles hoy para la dirección guardada |
+| `get_allergens` | Info oficial de alérgenos (PDF autorizado + 14 alérgenos EU + leyenda); filtra por producto |
 | `get_menu` | Carta con precios por categoría: `ofertas`, `pizzas`, `entrantes`, `burgers`, `postres`, `bebidas` o una ruta de la web |
 | `search_products` | Búsqueda de productos en toda la carta |
 | `get_product_details` | Tamaños, masas, bordes e ingredientes de un producto |
@@ -105,6 +107,7 @@ ChatGPT (web/escritorio) admite servidores MCP como **conectores personalizados 
 | `reorder` | Llena el carrito con un pedido anterior |
 | `remove_from_cart` | Quita una línea del carrito por su `uuid` (de `get_cart`) |
 | `clear_cart` | Vacía el carrito (verifica que quedó vacío o lanza error) |
+| `apply_coupon` / `remove_coupon` | Aplica/quita un código promocional en el carrito |
 | `toggle_favorite_order` | Marca/desmarca un pedido como favorito |
 
 Ninguna de ellas paga ni confirma pedidos — el checkout no existe en este MCP — pero **sí modifican el estado real de tu cuenta**.
@@ -122,6 +125,8 @@ Por defecto Claude Code pide permiso en cada llamada a una tool MCP. Para usar e
       "mcp__telepizza__list_saved_addresses",
       "mcp__telepizza__set_delivery_address",
       "mcp__telepizza__find_stores",
+      "mcp__telepizza__set_pickup_store",
+      "mcp__telepizza__get_allergens",
       "mcp__telepizza__get_store_schedule",
       "mcp__telepizza__get_delivery_slots",
       "mcp__telepizza__get_menu",
@@ -142,7 +147,7 @@ Por defecto Claude Code pide permiso en cada llamada a una tool MCP. Para usar e
 > ⚠️ **Aviso de seguridad**
 >
 > - **No añadas `mcp__telepizza` a secas** (el servidor entero): eso auto-aprobaría también las herramientas de escritura.
-> - Las herramientas `WRITE` (`add_to_cart`, `reorder`, `remove_from_cart`, `clear_cart`, `toggle_favorite_order`) **deben quedarse fuera de la allowlist** para que Claude te pida confirmación cada vez: modifican el carrito y los favoritos de tu cuenta real. No pueden gastar dinero (no hay checkout), pero un carrito lleno por error acaba en sorpresas si luego rematas el pedido a mano.
+> - Las herramientas `WRITE` (`add_to_cart`, `reorder`, `remove_from_cart`, `clear_cart`, `apply_coupon`, `remove_coupon`, `toggle_favorite_order`) **deben quedarse fuera de la allowlist** para que Claude te pida confirmación cada vez: modifican el carrito y los favoritos de tu cuenta real. No pueden gastar dinero (no hay checkout), pero un carrito lleno por error acaba en sorpresas si luego rematas el pedido a mano.
 > - Estas herramientas usan tus credenciales reales de telepizza.es; concede permisos solo en máquinas de confianza.
 
 ## 🎁 Puntos MiTelepi
@@ -151,6 +156,12 @@ Por defecto Claude Code pide permiso en cada llamada a una tool MCP. Para usar e
 - `get_loyalty_rewards` lista el catálogo de canjes: cada recompensa con su **coste en puntos**, el **precio resultante** y el canal (a domicilio o recoger). Ejemplo: "Pizza mediana 5 ingredientes → 1.600 puntos + 9,95€ a domicilio".
 - **Cómo se usan**: el canje se materializa al hacer un pedido — con puntos suficientes, la promoción aparece disponible en el flujo de ofertas/carrito de la web o la app (máximo 3 canjes distintos por pedido). Este MCP no confirma pedidos, así que el canje se remata en la web/app.
 - 💡 Los puntos caducan (los movimientos de `get_loyalty_status` lo muestran): revisa el saldo de vez en cuando.
+
+## ⚕️ Alérgenos (léelo)
+
+`get_allergens` devuelve **siempre** el PDF oficial de alérgenos de Telepizza, los 14 alérgenos EU y la leyenda (`●` presente / `○` puede estar presente). El parseo por producto es **orientativo** y requiere el extra `pip install 'mcp-telepizza[allergens]'` (usa `pdfplumber`).
+
+> ⚠️ **No certifica que un producto sea apto.** Las cocinas de Telepizza manipulan los 14 alérgenos (contaminación cruzada). Ante una alergia real, **consulta el PDF oficial y confirma en tienda**; no te fíes de una respuesta automática.
 
 ## 📝 Notas
 

@@ -145,6 +145,38 @@ def test_parse_store_options_from_getstore(client, monkeypatch):
     assert first["value"].startswith("20")  # ISO datetime
 
 
+def test_allergens_structure(client, monkeypatch):
+    monkeypatch.setattr(
+        client,
+        "_parse_allergen_pdf",
+        lambda: (
+            [
+                {"product": "Pepperoni", "markers_raw": "Pepperoni ● ● ●",
+                 "contains_count": 3, "may_contain_count": 0},
+                {"product": "Atún", "markers_raw": "Atún ●",
+                 "contains_count": 1, "may_contain_count": 0},
+            ],
+            "9/06/2026",
+        ),
+    )
+    info = client.allergens("pepper")
+    assert info["sources"]["allergens"].endswith("alergenos.pdf")
+    assert len(info["eu_allergens"]) == 14
+    assert "●" in info["legend"] and info["disclaimer"]
+    assert info["parsed"] is True and info["last_updated"] == "9/06/2026"
+    # filtro por nombre de producto
+    assert len(info["products"]) == 1
+    assert info["products"][0]["product"] == "Pepperoni"
+
+
+def test_allergens_without_pdf_dependency(client, monkeypatch):
+    monkeypatch.setattr(client, "_parse_allergen_pdf", lambda: (None, None))
+    info = client.allergens()
+    assert info["parsed"] is False
+    assert "mcp-telepizza[allergens]" in info["note"]
+    assert info["sources"] and info["disclaimer"]  # útil aun sin parseo
+
+
 def test_looks_logged_out():
     assert TelepizzaClient._looks_logged_out('<input id="login-form-email">') is True
     assert (

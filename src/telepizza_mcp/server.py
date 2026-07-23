@@ -105,6 +105,28 @@ def get_offers() -> list[dict[str, Any]]:
 
 
 @mcp.tool()
+def get_allergens(product: str = "") -> dict[str, Any]:
+    """Official allergen info for Telepizza products.
+
+    Returns the authoritative allergen PDF, the 14 EU allergens and the legend.
+    Optionally filter by product name. This does NOT certify a product as
+    allergen-free (kitchens handle all 14 allergens); always verify on the
+    official PDF for a real allergy.
+    """
+    return client().allergens(product or None)
+
+
+@mcp.tool()
+def set_pickup_store(store_id: str) -> dict[str, Any]:
+    """Bind the session to a store for TAKEAWAY/pickup (store_id from find_stores).
+
+    Switches pricing to pickup mode (no delivery minimum); unlocks "a recoger"
+    offers and loyalty rewards.
+    """
+    return client().set_pickup_store(store_id)
+
+
+@mcp.tool()
 def get_product_details(product_id: str) -> dict[str, Any]:
     """Get sizes, dough/sauce/ingredient options and price of one product.
 
@@ -211,6 +233,18 @@ def remove_from_cart(uuid: str) -> dict[str, Any]:
 def clear_cart() -> dict[str, Any]:
     """WRITE — empties the cart completely. Returns the final snapshot."""
     return client().clear_cart()
+
+
+@mcp.tool()
+def apply_coupon(code: str) -> dict[str, Any]:
+    """WRITE — applies a promo code to the cart (needs a non-empty cart)."""
+    return client().apply_coupon(code)
+
+
+@mcp.tool()
+def remove_coupon(code: str) -> dict[str, Any]:
+    """WRITE — removes an applied promo code from the cart by its code."""
+    return client().remove_coupon(code)
 
 
 @mcp.tool()

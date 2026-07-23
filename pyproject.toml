@@ -1,6 +1,6 @@
 [project]
 name = "mcp-telepizza"
-version = "0.4.0"
+version = "0.5.0"
 description = "Servidor MCP no oficial para telepizza.es: carta, ofertas, tiendas, puntos MiTelepi, carrito e historial de pedidos (sin checkout)"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -16,6 +16,9 @@ dependencies = [
 
 [project.scripts]
 telepizza-mcp = "telepizza_mcp.server:main"
+
+[project.optional-dependencies]
+allergens = ["pdfplumber>=0.11"]
 
 [project.urls]
 Repository = "https://github.com/aramosf/mcp-telepizza"

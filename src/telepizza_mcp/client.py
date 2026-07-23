@@ -233,15 +233,18 @@ class TelepizzaClient:
                 addrs.append(json.loads(htmllib.unescape(m.group(1))))
         return addrs
 
-    def _store_options(self, lat: float, lng: float) -> list:
-        """Delivery-hour <option> elements for the store serving lat/lng.
+    def _store_options(
+        self, lat: float, lng: float, method: str = "delivery", sid: str = ""
+    ) -> tuple[list, dict[str, Any]]:
+        """Hour <option>s + store dict for the store serving lat/lng.
 
         Cada opción lleva la tienda en data-store-* (id, mínimo, coste, espera).
-        Falla con el mensaje del sitio si la tienda está cerrada.
+        Para recoger (method="takeaway") hay que pasar el sid de la tienda.
+        Falla con el mensaje del sitio si no hay tienda/horario disponible.
         """
         r = self._get(
             CONTROLLER + "Stores-GetStore",
-            params={"sid": "", "lat": lat, "lng": lng, "method": "delivery"},
+            params={"sid": sid, "lat": lat, "lng": lng, "method": method},
         )
         data = r.json()
         if data.get("error"):
@@ -249,8 +252,8 @@ class TelepizzaClient:
         soup = BeautifulSoup(data.get("renderedHtml", ""), "html.parser")
         opts = soup.select("select[name=deliveryHour] option")
         if not opts:
-            raise TelepizzaError("No delivery hours available for this address")
-        return opts
+            raise TelepizzaError("No hours available for this store/address")
+        return opts, data.get("store") or {}
 
     def _default_address(self, address: dict[str, Any] | None = None) -> dict[str, Any]:
         if address is not None:
@@ -267,52 +270,83 @@ class TelepizzaClient:
         """
         self.ensure_login()
         address = self._default_address(address)
-
         lat, lng = address["latitude"], address["longitude"]
-        opts = self._store_options(lat, lng)
-        opt = next((o for o in opts if o.get("data-is-first") == "true"), opts[0])
+        opts, _ = self._store_options(lat, lng, method="delivery")
+        customer = {
+            "street": address.get("address1", ""),
+            "streetNumber": address.get("streetNumber", ""),
+            "reference": "",
+            "state": address.get("city", ""),
+            "postalCode": address.get("postalCode", ""),
+            "lat": lat,
+            "lng": lng,
+            "addressText": address.get("addressText", ""),
+            "alternativeArea": "",
+            "isMeetingPoint": False,
+        }
+        return self._set_store("delivery", opts, customer, address.get("addressText"))
 
+    def set_pickup_store(
+        self, store_id: str, address: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Bind the session to a store for TAKEAWAY (pickup).
+
+        store_id sale de find_stores(); las coordenadas de una dirección
+        guardada (o la de por defecto) sitúan la búsqueda de la tienda.
+        """
+        self.ensure_login()
+        address = self._default_address(address)
+        lat, lng = address["latitude"], address["longitude"]
+        opts, store = self._store_options(lat, lng, method="takeaway", sid=store_id)
+        customer = {
+            "street": store.get("address1", ""),
+            "streetNumber": "",
+            "reference": "",
+            "state": store.get("city", ""),
+            "postalCode": store.get("postalCode", ""),
+            "lat": store.get("latitude") or lat,
+            "lng": store.get("longitude") or lng,
+            "addressText": store.get("address1", ""),
+            "alternativeArea": "",
+            "isMeetingPoint": False,
+        }
+        return self._set_store("takeaway", opts, customer, store.get("address1"))
+
+    def _set_store(
+        self, method: str, opts: list, customer: dict, label: str | None
+    ) -> dict[str, Any]:
+        opt = next((o for o in opts if o.get("data-is-first") == "true"), opts[0])
         payload = {
             "shopId": opt["data-store-id"],
             "deliveryHour": opt["value"],
-            "shippingMethod": "delivery",
-            "minimumAmount": opt.get("data-store-min-amount", ""),
+            "shippingMethod": method,
+            "minimumAmount": opt.get("data-store-min-amount") or "0",
             "waitTime": opt.get("data-store-wait-time", ""),
-            "deliveryCost": opt.get("data-store-delivery-cost", ""),
-            "customerAddress": {
-                "street": address.get("address1", ""),
-                "streetNumber": address.get("streetNumber", ""),
-                "reference": "",
-                "state": address.get("city", ""),
-                "postalCode": address.get("postalCode", ""),
-                "lat": lat,
-                "lng": lng,
-                "addressText": address.get("addressText", ""),
-                "alternativeArea": "",
-                "isMeetingPoint": False,
-            },
+            "deliveryCost": opt.get("data-store-delivery-cost") or "0",
+            "customerAddress": customer,
             "shippingComment": "",
             "redirectAction": "",
             "saveAddress": False,
             "isAsap": opt.get("data-is-first", "false"),
         }
-        r2 = self.http.post(
+        r = self.http.post(
             CONTROLLER + "Stores-SetStore",
             content=json.dumps(payload),
             headers={"Content-Type": "application/json"},
         )
-        r2.raise_for_status()
-        result = r2.json()
+        r.raise_for_status()
+        result = r.json()
         if result.get("error"):
             raise TelepizzaError(f"Stores-SetStore: {json.dumps(result)[:400]}")
-        self._cache.clear()  # los precios dependen de la tienda
+        self._cache.clear()  # los precios dependen de la tienda/modo
         self.store = {
             "shopId": opt["data-store-id"],
-            "address": address.get("addressText"),
-            "minimumAmount": opt.get("data-store-min-amount"),
-            "deliveryCost": opt.get("data-store-delivery-cost"),
+            "shippingMethod": method,
+            "address": label,
+            "minimumAmount": parse_price(opt.get("data-store-min-amount")),
+            "deliveryCost": parse_price(opt.get("data-store-delivery-cost")),
             "waitTimeMinutes": opt.get("data-store-wait-time"),
-            "firstDeliverySlot": opt["value"],
+            "firstSlot": opt["value"],
             "availableSlots": [o["value"] for o in opts],
         }
         return self.store
@@ -343,13 +377,13 @@ class TelepizzaClient:
         """Available delivery time slots for a saved address (default if None)."""
         self.ensure_login()
         address = self._default_address(address)
-        opts = self._store_options(address["latitude"], address["longitude"])
+        opts, _ = self._store_options(address["latitude"], address["longitude"])
         first = opts[0]
         return {
             "address": address.get("addressText"),
             "shopId": first.get("data-store-id"),
-            "minimumAmount": first.get("data-store-min-amount"),
-            "deliveryCost": first.get("data-store-delivery-cost"),
+            "minimumAmount": parse_price(first.get("data-store-min-amount")),
+            "deliveryCost": parse_price(first.get("data-store-delivery-cost")),
             "waitTimeMinutes": first.get("data-store-wait-time"),
             "slots": [o.get("value") for o in opts if o.get("value")],
         }
@@ -694,7 +728,7 @@ class TelepizzaClient:
             address = self._default_address()
             result["default_address"] = address.get("addressText")
             try:
-                opts = self._store_options(address["latitude"], address["longitude"])
+                opts, _ = self._store_options(address["latitude"], address["longitude"])
                 first = opts[0]
                 result["store_open"] = True
                 result["store_id"] = first.get("data-store-id")
@@ -763,6 +797,13 @@ class TelepizzaClient:
             label = el.get("data-promotion-name") or el.get("aria-label")
             offers.append({"remove_url": url, "label": label})
 
+        coupons = []
+        for el in soup.select("[data-code], .coupon-code, .coupon-price-adjustment"):
+            code = el.get("data-code")
+            uuid = el.get("data-uuid")
+            if code:
+                coupons.append({"code": code, "uuid": uuid})
+
         total = None
         m = re.search(r"Importe total:\s*([\d.,]+\s*€)", text)
         if m:
@@ -772,6 +813,7 @@ class TelepizzaClient:
             "empty": empty,
             "items": items,
             "offers": offers,
+            "coupons": coupons,
             "total": total,
         }
 
@@ -894,6 +936,36 @@ class TelepizzaClient:
             )
         return final
 
+    def apply_coupon(self, code: str) -> dict[str, Any]:
+        """Apply a promo code to the cart (Cart-AddCoupon). Needs a non-empty cart."""
+        self.ensure_store()
+        r = self._get(
+            CONTROLLER + "Cart-AddCoupon",
+            params={"couponCode": code, "csrf_token": self._csrf()},
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        data = r.json()
+        if data.get("error"):
+            raise TelepizzaError(
+                str(data.get("errorMessage") or "Coupon rejected")[:200]
+            )
+        return {"applied": code, "cart": self.cart()}
+
+    def remove_coupon(self, code: str) -> dict[str, Any]:
+        """Remove an applied coupon by its code (Cart-RemoveCouponLineItem)."""
+        self.ensure_login()
+        snapshot = self._parse_cart(self._minicart_html())
+        match = next((c for c in snapshot["coupons"] if c["code"] == code), None)
+        params = {"code": code}
+        if match and match.get("uuid"):
+            params["uuid"] = match["uuid"]
+        self._get(
+            CONTROLLER + "Cart-RemoveCouponLineItem",
+            params=params,
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        return {"removed": code, "cart": self.cart()}
+
     def toggle_favorite_order(self, order_id: str) -> dict[str, Any]:
         """Mark/unmark a past order as favorite."""
         self.ensure_login()
@@ -907,6 +979,94 @@ class TelepizzaClient:
             return r.json()
         except ValueError:
             return {"status": r.status_code}
+
+    # ---------------------------------------------------------------- allergens
+
+    ALLERGEN_DOCS = {
+        "allergens": "https://statices.telepizza.com/static/on/demandware.static/-/Sites-TelepizzaES-Library/default/dw9a714044/documents/alergenos.pdf",
+        "nutrition": "https://statices.telepizza.com/static/on/demandware.static/-/Sites-TelepizzaES-Library/default/dw972fcbc7/documents/nutricion.pdf",
+        "celiacs": "https://statices.telepizza.com/static/on/demandware.static/-/Sites-TelepizzaES-Library/default/dw11de66ed/documents/celiacos.pdf",
+    }
+    EU_ALLERGENS = [
+        "gluten", "crustáceos", "huevo", "pescado", "cacahuetes", "soja", "leche",
+        "frutos de cáscara", "apio", "mostaza", "sésamo", "sulfitos",
+        "altramuces", "moluscos",
+    ]
+
+    def allergens(self, product: str | None = None) -> dict[str, Any]:
+        """Official allergen information for Telepizza products.
+
+        Devuelve SIEMPRE la fuente autorizada (PDF oficial de alérgenos) y la
+        leyenda; el parseo por producto es best-effort y NO determina si algo
+        es "seguro" — para una alergia hay que consultar el PDF oficial, ya que
+        además las cocinas manipulan los 14 alérgenos (contaminación cruzada).
+        """
+        result: dict[str, Any] = {
+            "sources": dict(self.ALLERGEN_DOCS),
+            "eu_allergens": list(self.EU_ALLERGENS),
+            "legend": {
+                "●": "el alérgeno está presente",
+                "○": "puede estar presente; no se asegura su ausencia",
+            },
+            "disclaimer": (
+                "Fuente autorizada: el PDF oficial. Este parseo es orientativo y "
+                "no determina la ausencia de alérgenos. Las cocinas manipulan los "
+                "14 alérgenos (posible contaminación cruzada). Ante una alergia, "
+                "consulta el PDF y confirma en tienda."
+            ),
+        }
+        rows, updated = self._parse_allergen_pdf()
+        if rows is None:
+            result["parsed"] = False
+            result["note"] = (
+                "Instala el extra para parsear el PDF: pip install 'mcp-telepizza[allergens]'"
+            )
+            return result
+        result["parsed"] = True
+        result["last_updated"] = updated
+        if product:
+            q = product.lower()
+            rows = [r for r in rows if q in r["product"].lower()]
+        result["products"] = rows
+        return result
+
+    def _parse_allergen_pdf(self) -> tuple[list[dict[str, Any]] | None, str | None]:
+        try:
+            import pdfplumber
+        except ImportError:
+            return None, None
+        cached = self._cache.get("allergen_pdf")
+        if cached and cached[0] > time.monotonic():
+            return cached[1]
+        pdf_bytes = httpx.get(
+            self.ALLERGEN_DOCS["allergens"],
+            headers={"User-Agent": USER_AGENT},
+            timeout=40,
+        ).content
+        import io
+
+        updated = None
+        rows: list[dict[str, Any]] = []
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text() or ""
+                if updated is None:
+                    m = re.search(r"Última actualización:\s*([\d/]+)", text)
+                    if m:
+                        updated = m.group(1)
+                for line in text.split("\n"):
+                    marks = line.count("●") + line.count("○")
+                    name = re.sub(r"[●○].*$", "", line).strip(" -–—*")
+                    if marks and name and not name.isupper():
+                        rows.append({
+                            "product": name,
+                            "markers_raw": line.strip(),
+                            "contains_count": line.count("●"),
+                            "may_contain_count": line.count("○"),
+                        })
+        value = (rows, updated)
+        self._cache["allergen_pdf"] = (time.monotonic() + 3600, value)
+        return value
 
     def close(self) -> None:
         self.http.close()
